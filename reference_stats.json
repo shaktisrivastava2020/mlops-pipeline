@@ -1,0 +1,155 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-04-29T18:52:58.149222+00:00",
+  "source_file": "data/training.csv",
+  "source_sha256": "54794da573541c127e2be3c682d083b3fb4b8323261efa90d7554d3e70514dbd",
+  "n_rows": 176,
+  "feature_columns": [
+    "tenure_days",
+    "total_orders",
+    "total_spend",
+    "avg_order_value",
+    "days_since_last_order",
+    "orders_per_month",
+    "unique_products",
+    "unique_payment_methods",
+    "weekday_order_ratio",
+    "tier_standard",
+    "tier_premium",
+    "tier_gold"
+  ],
+  "feature_stats": {
+    "tenure_days": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 395.97159090909093,
+      "std": 196.89371836391538,
+      "min": 60.0,
+      "p25": 237.75,
+      "p50": 376.0,
+      "p75": 556.5,
+      "p95": 697.75,
+      "p99": 714.75,
+      "max": 722.0
+    },
+    "total_orders": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 5.176136363636363,
+      "std": 1.90868656818882,
+      "min": 2.0,
+      "p25": 4.0,
+      "p50": 5.0,
+      "p75": 6.0,
+      "p95": 8.0,
+      "p99": 10.0,
+      "max": 10.0
+    },
+    "total_spend": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 63552.730227272725,
+      "std": 27491.039023099973,
+      "min": 14717.22,
+      "p25": 42355.235,
+      "p50": 62641.715,
+      "p75": 84355.285,
+      "p95": 109089.81749999999,
+      "p99": 125678.60500000001,
+      "max": 148118.43
+    },
+    "avg_order_value": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 12322.065693046537,
+      "std": 3189.4823553743595,
+      "min": 5069.945714285714,
+      "p25": 10472.537232142859,
+      "p50": 12328.782500000001,
+      "p75": 14427.912187499998,
+      "p95": 16938.294375,
+      "p99": 19970.725250000003,
+      "max": 20712.44
+    },
+    "days_since_last_order": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 32.65909090909091,
+      "std": 29.89023208384261,
+      "min": 1.0,
+      "p25": 9.0,
+      "p50": 23.0,
+      "p75": 48.0,
+      "p95": 84.0,
+      "p99": 139.5,
+      "max": 151.0
+    },
+    "orders_per_month": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 0.5963210192857208,
+      "std": 0.5790030160089129,
+      "min": 0.0888888888888888,
+      "p25": 0.25263195165706726,
+      "p50": 0.40262835598674407,
+      "p75": 0.7090524832687566,
+      "p95": 1.8361909175162185,
+      "p99": 2.619047619047619,
+      "max": 4.0
+    },
+    "unique_products": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 5.0,
+      "std": 1.820517979665599,
+      "min": 2.0,
+      "p25": 4.0,
+      "p50": 5.0,
+      "p75": 6.0,
+      "p95": 8.0,
+      "p99": 9.25,
+      "max": 10.0
+    },
+    "unique_payment_methods": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 3.602272727272727,
+      "std": 1.1010620610745165,
+      "min": 2.0,
+      "p25": 3.0,
+      "p50": 4.0,
+      "p75": 4.0,
+      "p95": 6.0,
+      "p99": 6.0,
+      "max": 6.0
+    },
+    "weekday_order_ratio": {
+      "type": "continuous",
+      "n": 176,
+      "mean": 0.7243055555555556,
+      "std": 0.2117870595512966,
+      "min": 0.0,
+      "p25": 0.6,
+      "p50": 0.75,
+      "p75": 0.8616071428571428,
+      "p95": 1.0,
+      "p99": 1.0,
+      "max": 1.0
+    },
+    "tier_standard": {
+      "type": "binary",
+      "n": 176,
+      "proportion_one": 0.5681818181818182
+    },
+    "tier_premium": {
+      "type": "binary",
+      "n": 176,
+      "proportion_one": 0.2840909090909091
+    },
+    "tier_gold": {
+      "type": "binary",
+      "n": 176,
+      "proportion_one": 0.14772727272727273
+    }
+  }
+}
