@@ -21,6 +21,12 @@ from drift import detect_drift, load_reference
 from evaluation import decide_promotion, evaluate
 from features import FEATURE_COLUMNS, MIN_ORDERS, MIN_TENURE_DAYS, build_features
 from labeling import compute_signals
+from alerter import (
+    alert_drift_detected,
+    alert_pipeline_error,
+    alert_promotion,
+    alert_promotion_rejected,
+)
 from registry import (
     get_production_version,
     list_versions,
@@ -111,6 +117,8 @@ def run_pipeline(
         drift_dict = drift.to_dict()
         drift_dict["batch_id"] = batch_id
         write_drift_report(batch_id, drift_dict)
+        if drift.system_drift:
+            alert_drift_detected(batch_id, drift.n_drifted, "fraction" if drift.fraction_rule_tripped else "severity")
 
         drift_reason = (
             "fraction" if drift.fraction_rule_tripped
@@ -179,6 +187,9 @@ def run_pipeline(
             new_version = next_version()
             register(new_version, chal)
             set_production_version(new_version, reason=" | ".join(decision.reasons))
+            alert_promotion(batch_id, new_version, chal_eval.overall_f1, decision.f1_delta)
+        else:
+            alert_promotion_rejected(batch_id, decision.reasons)
 
         result = PipelineResult(
             batch_id=batch_id, started_at=started_at,
@@ -210,4 +221,5 @@ def run_pipeline(
             write_audit_log(batch_id, asdict(result))
         except Exception:
             pass
+        alert_pipeline_error(batch_id, f"{type(e).__name__}: {e}")
         raise
