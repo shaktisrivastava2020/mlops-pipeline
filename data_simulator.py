@@ -23,6 +23,17 @@ import pandas as pd
 
 REFERENCE_PATH = Path("reference_stats.json")
 
+# Empirical order-status distribution from Day 1's orders table.
+# Used by the simulator to label orders realistically; the labeling
+# module then derives churned/not-churned from this status mix.
+ORDER_STATUS_DISTRIBUTION = {
+    "Delivered":  0.384,
+    "Processing": 0.190,
+    "Cancelled":  0.159,
+    "Shipped":    0.136,
+    "Returned":   0.131,
+}
+
 
 def _load_payment_methods_from_db() -> list[str]:
     """Read the canonical payment-method list from the production DB.
@@ -183,6 +194,9 @@ def simulate(config: SimulatorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
 
             order_amount = max(1.0, float(rng.normal(p["order_amount_mean"], p["order_amount_std"])))
             payment = rng.choice(p["payment_methods"])
+            statuses = list(ORDER_STATUS_DISTRIBUTION.keys())
+            status_probs = list(ORDER_STATUS_DISTRIBUTION.values())
+            order_status = str(rng.choice(statuses, p=status_probs))
             product_id = int(rng.integers(1, p["n_total_products"] + 1))
             quantity = int(rng.integers(1, 5))
 
@@ -192,6 +206,7 @@ def simulate(config: SimulatorConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
                 "quantity": quantity,
                 "order_amount": round(order_amount, 2),
                 "payment_method": payment,
+                "order_status": order_status,
                 "order_date": order_dt,
                 "batch_id": config.batch_id,
             })
@@ -210,3 +225,78 @@ def summarize(customers_df: pd.DataFrame, orders_df: pd.DataFrame) -> dict:
         "weekday_ratio": float((pd.to_datetime(orders_df["order_date"]).dt.weekday < 5).mean()),
         "unique_payment_methods": int(orders_df["payment_method"].nunique()),
     }
+
+
+# ---------- persistence ----------
+
+def persist(
+    customers_df: pd.DataFrame,
+    orders_df: pd.DataFrame,
+) -> dict[str, int]:
+    """
+    Write simulator output to simulated_customers + simulated_orders tables.
+    Returns {'n_customers': int, 'n_orders': int} on success.
+
+    Customer IDs are assigned by Postgres SERIAL on insert; this function
+    rewires orders' _local_cust_idx -> the real DB-assigned customer_id.
+    """
+    from sqlalchemy import text
+    from database import get_engine
+
+    if customers_df.empty:
+        raise ValueError("customers_df is empty — nothing to persist")
+    if "_local_idx" not in customers_df.columns:
+        raise ValueError("customers_df must have _local_idx (simulator output)")
+    if "_local_cust_idx" not in orders_df.columns:
+        raise ValueError("orders_df must have _local_cust_idx (simulator output)")
+
+    engine = get_engine()
+    with engine.begin() as conn:
+        # Bulk-insert customers in one statement, return all assigned IDs in
+        # the same order as the input rows. PostgreSQL preserves VALUES order
+        # in INSERT RETURNING, so zipping is safe.
+        cust_rows = [
+            {"tier": r["customer_tier"], "join_date": r["join_date"], "batch_id": r["batch_id"]}
+            for _, r in customers_df.iterrows()
+        ]
+        # SQLAlchemy text() doesn't support multi-row INSERT RETURNING with
+        # executemany — we have to build the VALUES list inline.
+        # Use a CTE-style INSERT with unnest for safety on larger batches.
+        n = len(cust_rows)
+        placeholders = ", ".join([f"(:tier_{i}, :jd_{i}, :bid_{i})" for i in range(n)])
+        params = {}
+        for i, r in enumerate(cust_rows):
+            params[f"tier_{i}"] = r["tier"]
+            params[f"jd_{i}"] = r["join_date"]
+            params[f"bid_{i}"] = r["batch_id"]
+        result = conn.execute(text(
+            f"INSERT INTO simulated_customers (customer_tier, join_date, batch_id) "
+            f"VALUES {placeholders} RETURNING customer_id"
+        ), params)
+        assigned_ids = [row[0] for row in result.fetchall()]
+        local_indices = list(customers_df["_local_idx"].astype(int))
+        local_to_db: dict[int, int] = dict(zip(local_indices, assigned_ids))
+
+        # Insert orders using the real customer_ids (bulk).
+        if not orders_df.empty:
+            order_rows = []
+            for row in orders_df.to_dict("records"):
+                order_rows.append({
+                    "customer_id": local_to_db[int(row["_local_cust_idx"])],
+                    "product_id": int(row["product_id"]),
+                    "quantity": int(row["quantity"]),
+                    "order_amount": float(row["order_amount"]),
+                    "payment_method": row["payment_method"],
+                    "order_status": row.get("order_status", "Delivered"),
+                    "order_date": pd.Timestamp(row["order_date"]).to_pydatetime(),
+                    "batch_id": row["batch_id"],
+                })
+            conn.execute(text(
+                "INSERT INTO simulated_orders "
+                "(customer_id, product_id, quantity, order_amount, payment_method, "
+                "order_status, order_date, batch_id) VALUES "
+                "(:customer_id, :product_id, :quantity, :order_amount, :payment_method, "
+                ":order_status, :order_date, :batch_id)"
+            ), order_rows)
+
+    return {"n_customers": len(customers_df), "n_orders": len(orders_df)}
