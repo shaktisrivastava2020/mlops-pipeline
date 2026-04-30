@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 aiofiles==25.1.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
@@ -18,7 +19,13 @@ defusedxml==0.7.1
 filelock==3.29.0
 frozenlist==1.8.0
 fsspec==2026.2.0
+google-api-core==2.30.3
 google-auth==2.49.2
+google-cloud-core==2.5.1
+google-cloud-storage==3.5.0
+google-crc32c==1.8.0
+google-resumable-media==2.8.2
+googleapis-common-protos==1.74.0
 greenlet==3.5.0
 h11==0.16.0
 httpcore==1.0.9
@@ -46,6 +53,8 @@ pip_audit==2.9.0
 platformdirs==4.9.6
 pluggy==1.6.0
 propcache==0.4.1
+proto-plus==1.27.2
+protobuf==7.34.1
 py-serializable==2.1.0
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
@@ -71,7 +80,6 @@ SQLAlchemy==2.0.36
 sympy==1.13.1
 threadpoolctl==3.6.0
 toml==0.10.2
---extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.5.1+cpu
 typing_extensions==4.15.0
 tzdata==2026.2
