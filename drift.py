@@ -52,7 +52,9 @@ class DriftReport:
     n_features: int
     n_drifted: int
     drifted_fraction: float
-    system_drift: bool
+    system_drift: bool         # True if EITHER rule below trips
+    fraction_rule_tripped: bool   # > drift_feature_fraction features drifted
+    severity_rule_tripped: bool   # >= 1 feature has severe drift (PSI or KS)
     feature_results: list[FeatureDriftResult]
     reference_sha256: str
 
@@ -186,6 +188,8 @@ def detect_drift(
     psi_threshold: float = 0.20,
     ks_pvalue_threshold: float = 0.05,
     drift_feature_fraction: float = 0.25,
+    severe_psi_threshold: float = 0.50,
+    severe_ks_statistic: float = 0.30,
 ) -> DriftReport:
     """Compute drift for every feature in the reference; return system-level summary."""
     reference_features: dict[str, dict] = reference["feature_stats"]
@@ -245,11 +249,20 @@ def detect_drift(
     n_drifted = sum(1 for r in results if r.drifted)
     fraction = n_drifted / len(results) if results else 0.0
 
+    fraction_rule = fraction > drift_feature_fraction
+    severity_rule = any(
+        (r.test == "psi" and r.statistic >= severe_psi_threshold)
+        or (r.test == "ks" and r.statistic >= severe_ks_statistic)
+        for r in results
+    )
+
     return DriftReport(
         n_features=len(results),
         n_drifted=n_drifted,
         drifted_fraction=fraction,
-        system_drift=fraction > drift_feature_fraction,
+        system_drift=fraction_rule or severity_rule,
+        fraction_rule_tripped=fraction_rule,
+        severity_rule_tripped=severity_rule,
         feature_results=results,
         reference_sha256=reference["source_sha256"],
     )

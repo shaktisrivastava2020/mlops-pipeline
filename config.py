@@ -23,11 +23,16 @@ class Settings(BaseSettings):
     # --- Drift detection thresholds ---
     PSI_DRIFT_THRESHOLD: float = 0.20    # PSI > 0.20 => meaningful drift (industry standard)
     KS_DRIFT_PVALUE: float = 0.05         # KS p-value < 0.05 => distribution shifted
-    DRIFT_FEATURE_FRACTION: float = 0.25  # >25% of features drifted => trigger retrain
+    DRIFT_FEATURE_FRACTION: float = 0.50  # >50% of features drifted => trigger retrain (calibrated against synthetic baseline noise)
 
     # --- Promotion criteria (champion vs challenger) ---
     MIN_F1_IMPROVEMENT: float = 0.02     # challenger must beat champion F1 by >= 0.02
     MAX_SEGMENT_REGRESSION: float = 0.05  # no slice may regress by more than 5%
+
+    # Severity-based drift triggers — any single feature with this much
+    # shift triggers retrain, regardless of how many other features moved.
+    SEVERE_PSI_THRESHOLD: float = 0.25
+    SEVERE_KS_STATISTIC: float = 0.25
 
     # --- Reference data ---
     REFERENCE_STATS_PATH: str = "reference_stats.json"
