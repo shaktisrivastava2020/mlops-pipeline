@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MLOps Pipeline · Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #1a1f2e; --border: #2a3142;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #3b82f6;
+    --good: #10b981; --bad: #ef4444; --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 24px 32px; border-bottom: 1px solid var(--border);
+           display: flex; justify-content: space-between; align-items: center; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header .status { font-size: 13px; color: var(--muted); }
+  header .status .dot { display: inline-block; width: 8px; height: 8px;
+                        border-radius: 50%; background: var(--good); margin-right: 6px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px; display: grid;
+         grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card { background: var(--panel); border: 1px solid var(--border);
+          border-radius: 8px; padding: 24px; }
+  .card h2 { margin: 0 0 16px 0; font-size: 14px; font-weight: 600;
+             text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  .full { grid-column: 1 / -1; }
+  .metric { display: flex; justify-content: space-between; padding: 8px 0;
+            border-bottom: 1px solid var(--border); }
+  .metric:last-child { border-bottom: none; }
+  .metric .label { color: var(--muted); font-size: 13px; }
+  .metric .value { font-family: "SF Mono", Monaco, monospace; font-size: 14px; }
+  .metric .value.big { font-size: 24px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; text-transform: uppercase;
+       font-size: 11px; letter-spacing: 0.05em; }
+  td.mono { font-family: "SF Mono", Monaco, monospace; font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
+           font-size: 11px; font-weight: 500; }
+  .badge.good { background: rgba(16,185,129,0.15); color: var(--good); }
+  .badge.bad { background: rgba(239,68,68,0.15); color: var(--bad); }
+  .badge.warn { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .controls { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
+  select, button { background: var(--bg); color: var(--text);
+                   border: 1px solid var(--border); border-radius: 6px;
+                   padding: 8px 14px; font-size: 13px; font-family: inherit; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent);
+                   color: white; font-weight: 500; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .log { font-family: "SF Mono", Monaco, monospace; font-size: 12px;
+         background: var(--bg); padding: 12px; border-radius: 6px;
+         margin-top: 12px; min-height: 60px; max-height: 200px; overflow: auto; white-space: pre-wrap; }
+  .muted { color: var(--muted); }
+  .center-empty { color: var(--muted); text-align: center; padding: 24px; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MLOps Pipeline · Dashboard</h1>
+  <div class="status"><span class="dot"></span><span id="apiStatus">Connecting…</span></div>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Production model</h2>
+    <div id="prodModel" class="center-empty">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h2>Trigger pipeline run</h2>
+    <p class="muted" style="margin: 0 0 12px 0; font-size: 13px;">
+      Manually trigger one full pipeline run. Optionally inject a synthetic drift scenario
+      to demonstrate the drift→retrain→promote loop.
+    </p>
+    <div class="controls">
+      <select id="driftPreset">
+        <option value="">No drift injection (real data only)</option>
+        <option value="engagement_decline">Engagement decline</option>
+        <option value="high_value_shift">High value shift</option>
+        <option value="premium_surge">Premium surge</option>
+        <option value="new_payment_method">New payment method</option>
+      </select>
+      <button id="runBtn" class="primary">Run pipeline</button>
+    </div>
+    <div id="runLog" class="log muted">Ready.</div>
+  </div>
+
+  <div class="card full">
+    <h2>Recent pipeline runs</h2>
+    <div id="auditTable" class="center-empty">Loading…</div>
+  </div>
+
+  <div class="card full">
+    <h2>Registered model versions</h2>
+    <div id="versionsTable" class="center-empty">Loading…</div>
+  </div>
+</main>
+
+<script>
+const API = "";  // same origin
+
+async function fetchJSON(path, opts = {}) {
+  const r = await fetch(API + path, opts);
+  if (!r.ok) throw new Error(`${path} returned ${r.status}`);
+  return r.json();
+}
+
+function fmtPct(x) { return x === null || x === undefined ? "—" : (x * 100).toFixed(1) + "%"; }
+function fmtNum(x) { return x === null || x === undefined ? "—" : x.toFixed(4); }
+function fmtDate(s) { return s ? new Date(s).toLocaleString() : "—"; }
+function badge(cls, text) { return `<span class="badge ${cls}">${text}</span>`; }
+
+async function loadProdModel() {
+  try {
+    const info = await fetchJSON("/model/info");
+    const md = info.metadata || {};
+    document.getElementById("prodModel").innerHTML = `
+      <div class="metric"><span class="label">Version</span><span class="value big">${info.production_version || "—"}</span></div>
+      <div class="metric"><span class="label">Trained at</span><span class="value">${fmtDate(md.trained_at)}</span></div>
+      <div class="metric"><span class="label">Training rows</span><span class="value">${md.n_train ?? "—"}</span></div>
+      <div class="metric"><span class="label">Test rows</span><span class="value">${md.n_test ?? "—"}</span></div>
+      <div class="metric"><span class="label">Best epoch</span><span class="value">${md.best_epoch ?? "—"}</span></div>
+      <div class="metric"><span class="label">Threshold</span><span class="value">${md.threshold ?? 0.40}</span></div>
+    `;
+  } catch (e) {
+    document.getElementById("prodModel").innerHTML = `<div class="center-empty">Failed to load: ${e.message}</div>`;
+  }
+}
+
+async function loadAudit() {
+  try {
+    const data = await fetchJSON("/audit/recent?limit=10");
+    if (!data.entries.length) {
+      document.getElementById("auditTable").innerHTML = `<div class="center-empty">No runs yet.</div>`;
+      return;
+    }
+    const rows = data.entries.map(e => {
+      const driftBadge = e.drift_detected ? badge("warn", `drift (${e.drift_reason})`) : badge("good", "no drift");
+      const promoteBadge = e.promoted ? badge("good", "promoted") :
+        (e.retrained ? badge("bad", "rejected") : badge("", "—"));
+      return `<tr>
+        <td class="mono">${e.batch_id}</td>
+        <td>${fmtDate(e.started_at)}</td>
+        <td>${driftBadge}</td>
+        <td>${e.n_features_drifted}/12</td>
+        <td>${e.retrained ? "yes" : "no"}</td>
+        <td>${promoteBadge}</td>
+        <td class="mono">${fmtNum(e.champion_f1)}</td>
+        <td class="mono">${fmtNum(e.challenger_f1)}</td>
+        <td class="mono">${e.f1_delta !== null && e.f1_delta !== undefined ? (e.f1_delta >= 0 ? "+" : "") + e.f1_delta.toFixed(4) : "—"}</td>
+      </tr>`;
+    }).join("");
+    document.getElementById("auditTable").innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Batch ID</th><th>Started</th><th>Drift</th><th>Features</th>
+          <th>Retrained</th><th>Outcome</th><th>Champ F1</th><th>Chal F1</th><th>Δ F1</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) {
+    document.getElementById("auditTable").innerHTML = `<div class="center-empty">Failed to load: ${e.message}</div>`;
+  }
+}
+
+async function loadVersions() {
+  try {
+    const data = await fetchJSON("/models");
+    if (!data.versions.length) {
+      document.getElementById("versionsTable").innerHTML = `<div class="center-empty">No models registered.</div>`;
+      return;
+    }
+    const rows = data.versions.map(v => `
+      <tr>
+        <td class="mono"><strong>${v.version}</strong></td>
+        <td>${fmtDate(v.trained_at)}</td>
+        <td>${v.n_train ?? "—"}</td>
+        <td>${fmtDate(v.registered_at)}</td>
+      </tr>
+    `).join("");
+    document.getElementById("versionsTable").innerHTML = `
+      <table>
+        <thead><tr><th>Version</th><th>Trained</th><th>Training rows</th><th>Registered</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (e) {
+    document.getElementById("versionsTable").innerHTML = `<div class="center-empty">Failed to load: ${e.message}</div>`;
+  }
+}
+
+async function runPipeline() {
+  const btn = document.getElementById("runBtn");
+  const log = document.getElementById("runLog");
+  const preset = document.getElementById("driftPreset").value;
+
+  btn.disabled = true;
+  log.classList.remove("muted");
+  log.textContent = `Triggering pipeline${preset ? ` with drift='${preset}'` : ""}…\nThis takes 1-3 minutes.`;
+
+  try {
+    const body = preset ? { inject_drift_preset: preset } : {};
+    const result = await fetchJSON("/run-pipeline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    log.textContent =
+      `Run ${result.batch_id}\n` +
+      `Drift detected: ${result.drift_detected} (${result.drift_reason})\n` +
+      `Features drifted: ${result.n_features_drifted}/12\n` +
+      `Retrained: ${result.retrained}\n` +
+      `Champion F1: ${fmtNum(result.champion_f1)}\n` +
+      `Challenger F1: ${fmtNum(result.challenger_f1)}\n` +
+      `Promoted: ${result.promoted}\n` +
+      `Reasons:\n  • ${result.promotion_reasons.join('\n  • ')}`;
+    await Promise.all([loadProdModel(), loadAudit(), loadVersions()]);
+  } catch (e) {
+    log.textContent = `Pipeline failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("runBtn").addEventListener("click", runPipeline);
+
+async function refreshAll() {
+  document.getElementById("apiStatus").textContent = "connected";
+  await Promise.all([loadProdModel(), loadAudit(), loadVersions()]);
+}
+refreshAll();
+setInterval(refreshAll, 30000);
+</script>
+</body>
+</html>

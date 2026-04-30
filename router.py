@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 
 import predictor
 from config import settings
@@ -17,6 +18,12 @@ from schemas import (
 )
 
 router = APIRouter()
+
+
+@router.get("/dashboard", tags=["system"], include_in_schema=False)
+def dashboard():
+    """Serve the visual demo dashboard."""
+    return FileResponse("dashboard.html", media_type="text/html")
 
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
